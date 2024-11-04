@@ -1,5 +1,8 @@
 const bcrypt = require("bcryptjs");
 const db = require("../config/db");
+const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
+require("dotenv").config();
 
 // Create a new user
 exports.createUser = (req, res) => {
@@ -99,4 +102,54 @@ exports.unlockUser = (req, res) => {
       res.json({ message: "User unlocked successfully" });
     }
   );
+};
+
+// Simulate password reset email
+exports.resetPasswordEmail = async (req, res) => {
+  const { userId, userEmail, reset_reason } = req.body;
+
+  db.query(
+    "UPDATE users SET reset_reason = ? WHERE id = ?",
+    [reset_reason, userId],
+    (err) => {
+      if (err)
+        return res
+          .status(500)
+          .json({ message: "Failed to set reset password reason" });
+      res.json({ message: "User reset password reason stored successfully" });
+    }
+  );
+
+  try {
+    // Generate a password reset token (expires in 1 hour)
+    const resetToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    // Email transporter setup
+    const transporter = nodemailer.createTransport({
+      pool: true,
+      host: "localhost",
+      port: 465,
+      secure: true, // use TLS
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+
+    const resetLink = `http://localhost:3000/reset-password/${resetToken}`;
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: userEmail,
+      subject: "Password Reset Request",
+      text: `Reason: ${reset_reason}\n\nTo reset your password, please click the link below:\n${resetLink}`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ message: "Password reset email sent successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to send password reset email" });
+  }
 };
