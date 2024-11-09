@@ -58,5 +58,5 @@ exports.login = (req, res) => {
 
 // Login and generate JWT token
 exports.getRole = (req, res) => {
-    res.status(200).json({ message: 'Valid Token', userRole: req.userRole });
+    res.status(200).json({ message: 'Valid Token', curUserRole: req.curUserRole });
 };

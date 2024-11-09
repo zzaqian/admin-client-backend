@@ -16,7 +16,6 @@ exports.createUser = (req, res) => {
       if (err) throw err;
       res.json({
         message: "User created successfully",
-        userId: results.insertId,
       });
     }
   );
@@ -63,20 +62,6 @@ exports.deleteUser = (req, res) => {
   });
 };
 
-// Reset a user's password
-exports.resetUserPassword = (req, res) => {
-  const { email, password } = req.body;
-  const hashedPassword = bcrypt.hashSync(password, 10);
-  db.query(
-    "UPDATE users SET password = ? WHERE email = ?",
-    [hashedPassword, email],
-    (err, results) => {
-      if (err) throw err;
-      res.json({ message: "Password reset successfully" });
-    }
-  );
-};
-
 // Lock a user and save the reason
 exports.lockUser = (req, res) => {
   const { id, lock_reason } = req.body;
@@ -106,50 +91,72 @@ exports.unlockUser = (req, res) => {
 
 // Simulate password reset email
 exports.resetPasswordEmail = async (req, res) => {
-  const { userId, userEmail, reset_reason } = req.body;
+  const { id, email, reset_reason } = req.body;
 
   db.query(
     "UPDATE users SET reset_reason = ? WHERE id = ?",
-    [reset_reason, userId],
+    [reset_reason, id],
     (err) => {
       if (err)
         return res
           .status(500)
           .json({ message: "Failed to set reset password reason" });
-      res.json({ message: "User reset password reason stored successfully" });
+      // res.json({ message: "User reset password reason stored successfully" });
     }
   );
 
   try {
     // Generate a password reset token (expires in 1 hour)
-    const resetToken = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+    const resetToken = jwt.sign({ id: id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
     // Email transporter setup
     const transporter = nodemailer.createTransport({
-      pool: true,
-      host: "localhost",
-      port: 465,
-      secure: true, // use TLS
+      service: "Gmail",
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD,
       },
     });
 
-    const resetLink = `http://localhost:3000/reset-password/${resetToken}`;
+    const resetLink = `http://localhost:3000/reset-password?token=${resetToken}`;
     const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: userEmail,
+      to: email,
       subject: "Password Reset Request",
       text: `Reason: ${reset_reason}\n\nTo reset your password, please click the link below:\n${resetLink}`,
     };
 
     await transporter.sendMail(mailOptions);
-    res.json({ message: "Password reset email sent successfully" });
+    return res.json({ message: "Password reset email sent successfully" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Failed to send password reset email" });
+    return res
+      .status(500)
+      .json({ message: "Failed to send password reset email" });
+  }
+};
+
+// Reset a user's password
+exports.resetPasswordConfirm = async (req, res) => {
+  const { newPassword } = req.body;
+  const curUserId = req.curUserId;
+
+  try {
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update the user's password in the database
+    db.query(
+      "UPDATE users SET password = ? WHERE id = ?",
+      [hashedPassword, curUserId],
+      (err, result) => {
+        if (err)
+          return res.status(500).json({ message: "Failed to reset password" });
+        res.json({ message: "Password reset successfully" });
+      }
+    );
+  } catch (error) {
+    res.status(400).json({ message: "Invalid or expired token" });
   }
 };
