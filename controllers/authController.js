@@ -43,7 +43,7 @@ exports.login = (req, res) => {
             // Check if password matches
             const passwordMatch = bcrypt.compareSync(password, user.password);
             if (passwordMatch) {
-                const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
+                const token = jwt.sign({ uuid: user.uuid, role: user.role }, process.env.JWT_SECRET, {
                     expiresIn: '1h',
                 });
                 res.json({ token });

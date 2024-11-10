@@ -2,16 +2,18 @@ const bcrypt = require("bcryptjs");
 const db = require("../config/db");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
+const crypto = require("crypto");
 require("dotenv").config();
 
 // Create a new user
 exports.createUser = (req, res) => {
   const { name, email, password, role } = req.body;
   const hashedPassword = bcrypt.hashSync(password, 10);
+  const uuid = crypto.randomUUID();
 
   db.query(
-    "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-    [name, email, hashedPassword, role],
+    "INSERT INTO users (uuid, name, email, password, role) VALUES (?, ?, ?, ?, ?)",
+    [uuid, name, email, hashedPassword, role],
     (err, results) => {
       if (err) throw err;
       res.json({
@@ -30,9 +32,9 @@ exports.getUsers = (req, res) => {
 };
 
 // Get details of a specific user by ID
-exports.getUserById = (req, res) => {
-  const { id } = req.params;
-  db.query("SELECT * FROM users WHERE id = ?", [id], (err, results) => {
+exports.getUserByUuid = (req, res) => {
+  const { uuid } = req.params;
+  db.query("SELECT * FROM users WHERE uuid = ?", [uuid], (err, results) => {
     if (err) return res.status(500).json({ message: "Database query failed" });
     if (results.length === 0)
       return res.status(404).json({ message: "User not found" });
@@ -42,10 +44,11 @@ exports.getUserById = (req, res) => {
 
 // Update a user
 exports.updateUser = (req, res) => {
-  const { id, name, email, role } = req.body;
+  const { uuid, name, email, role } = req.body;
+
   db.query(
-    "UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?",
-    [name, email, role, id],
+    "UPDATE users SET name = ?, email = ?, role = ? WHERE uuid = ?",
+    [name, email, role, uuid],
     (err, results) => {
       if (err) throw err;
       res.json({ message: "User updated successfully" });
@@ -55,8 +58,8 @@ exports.updateUser = (req, res) => {
 
 // Delete a user
 exports.deleteUser = (req, res) => {
-  const { id } = req.body;
-  db.query("DELETE FROM users WHERE id = ?", [id], (err, results) => {
+  const { uuid } = req.body;
+  db.query("DELETE FROM users WHERE uuid = ?", [uuid], (err, results) => {
     if (err) throw err;
     res.json({ message: "User deleted successfully" });
   });
@@ -64,10 +67,10 @@ exports.deleteUser = (req, res) => {
 
 // Lock a user and save the reason
 exports.lockUser = (req, res) => {
-  const { id, lock_reason } = req.body;
+  const { uuid, lock_reason } = req.body;
   db.query(
-    "UPDATE users SET status = 'Locked', lock_reason = ? WHERE id = ?",
-    [lock_reason, id],
+    "UPDATE users SET status = 'Locked', lock_reason = ? WHERE uuid = ?",
+    [lock_reason, uuid],
     (err) => {
       if (err) return res.status(500).json({ message: "Failed to lock user" });
       res.json({ message: "User locked successfully" });
@@ -77,10 +80,10 @@ exports.lockUser = (req, res) => {
 
 // Unlock a user
 exports.unlockUser = (req, res) => {
-  const { id } = req.body;
+  const { uuid } = req.body;
   db.query(
-    "UPDATE users SET status = 'Active', lock_reason = NULL WHERE id = ?",
-    [id],
+    "UPDATE users SET status = 'Active', lock_reason = NULL WHERE uuid = ?",
+    [uuid],
     (err) => {
       if (err)
         return res.status(500).json({ message: "Failed to unlock user" });
@@ -91,11 +94,11 @@ exports.unlockUser = (req, res) => {
 
 // Simulate password reset email
 exports.resetPasswordEmail = async (req, res) => {
-  const { id, email, reset_reason } = req.body;
+  const { uuid, email, reset_reason } = req.body;
 
   db.query(
-    "UPDATE users SET reset_reason = ? WHERE id = ?",
-    [reset_reason, id],
+    "UPDATE users SET reset_reason = ? WHERE uuid = ?",
+    [reset_reason, uuid],
     (err) => {
       if (err)
         return res
@@ -107,7 +110,7 @@ exports.resetPasswordEmail = async (req, res) => {
 
   try {
     // Generate a password reset token (expires in 1 hour)
-    const resetToken = jwt.sign({ id: id }, process.env.JWT_SECRET, {
+    const resetToken = jwt.sign({ uuid: uuid }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
 
@@ -140,7 +143,7 @@ exports.resetPasswordEmail = async (req, res) => {
 // Reset a user's password
 exports.resetPasswordConfirm = async (req, res) => {
   const { newPassword } = req.body;
-  const curUserId = req.curUserId;
+  const curUserUuid = req.curUserUuid;
 
   try {
     // Hash the new password
@@ -148,8 +151,8 @@ exports.resetPasswordConfirm = async (req, res) => {
 
     // Update the user's password in the database
     db.query(
-      "UPDATE users SET password = ? WHERE id = ?",
-      [hashedPassword, curUserId],
+      "UPDATE users SET password = ? WHERE uuid = ?",
+      [hashedPassword, curUserUuid],
       (err, result) => {
         if (err)
           return res.status(500).json({ message: "Failed to reset password" });

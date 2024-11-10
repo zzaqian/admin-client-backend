@@ -2,7 +2,7 @@ const express = require("express");
 const {
   createUser,
   getUsers,
-  getUserById,
+  getUserByUuid,
   updateUser,
   deleteUser,
   lockUser,
@@ -15,7 +15,7 @@ const router = express.Router();
 
 router.post("/create", verifyToken, createUser);
 router.get("/", verifyToken, getUsers);
-router.get("/:id", verifyToken, getUserById);
+router.get("/:uuid", verifyToken, getUserByUuid);
 router.put("/update", verifyToken, updateUser);
 router.delete("/delete", verifyToken, deleteUser);
 router.put("/lock", verifyToken, lockUser); // Route for locking a user
