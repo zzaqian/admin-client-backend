@@ -10,12 +10,19 @@ exports.createUser = (req, res) => {
   const { name, email, password, role } = req.body;
   const hashedPassword = bcrypt.hashSync(password, 10);
   const uuid = crypto.randomUUID();
+  // console.log(hashedPassword);
+  // console.log(uuid);
 
   db.query(
     "INSERT INTO users (uuid, name, email, password, role) VALUES (?, ?, ?, ?, ?)",
     [uuid, name, email, hashedPassword, role],
     (err, results) => {
-      if (err) throw err;
+      if (err) {
+        if (err.code === "ER_DUP_ENTRY")
+          return res.status(409).json({ message: "Duplicate email" });
+        else throw err;
+      }
+
       res.json({
         message: "User created successfully",
       });
@@ -31,7 +38,7 @@ exports.getUsers = (req, res) => {
   });
 };
 
-// Get details of a specific user by ID
+// Get details of a specific user by uuid
 exports.getUserByUuid = (req, res) => {
   const { uuid } = req.params;
   db.query("SELECT * FROM users WHERE uuid = ?", [uuid], (err, results) => {
