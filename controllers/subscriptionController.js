@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 require("dotenv").config();
+const { logActivity } = require('../helpers/logHelper');
 
 // Get all subscriptions
 exports.getSubs = (req, res) => {
@@ -69,6 +70,9 @@ WHERE
 // Cancel a subscription
 exports.cancelSub = (req, res) => {
   const { uuid, cancel_reason } = req.body;
+
+  // send email
+
   db.query(
     "UPDATE subscriptions SET is_canceled = true, details = ? WHERE uuid = ?",
     [cancel_reason, uuid],
@@ -77,7 +81,46 @@ exports.cancelSub = (req, res) => {
         return res
           .status(500)
           .json({ message: "Failed to cancel subscription" });
+
+      // Log the activity
+      logActivity(
+        "Subscription",
+        "Cancel Subscription",
+        `Canceled subscription with reason: ${cancel_reason}`,
+        req.curUserUuid,
+        uuid
+      );
+
       res.json({ message: "Subscription cancelled successfully" });
+    }
+  );
+};
+
+// Refund a subscription, which automatically cancels it and sets it to 'Expired'
+exports.refundSub = (req, res) => {
+  const { uuid, refund_amount } = req.body;
+
+  // send email
+
+  db.query(
+    "UPDATE subscriptions SET status = 'Expired', is_canceled = true, details = 'Refunded with amount: ?' WHERE uuid = ?",
+    [refund_amount, uuid],
+    (err) => {
+      if (err)
+        return res
+          .status(500)
+          .json({ message: "Failed to refund subscription" });
+
+      // Log the activity
+      logActivity(
+        "Subscription",
+        "Refund Subscription",
+        `Refunded subscription with amount: ${refund_amount}`,
+        req.curUserUuid,
+        uuid
+      );
+
+      res.json({ message: "Subscription refunded successfully" });
     }
   );
 };
@@ -93,6 +136,16 @@ exports.updatePlan = (req, res) => {
         return res
           .status(500)
           .json({ message: "Failed to update subscription plan" });
+
+      // Log the activity
+      logActivity(
+        "Subscription",
+        "Update Plan",
+        `Updated subscription plan to: ${new_plan}`,
+        req.curUserUuid,
+        uuid
+      );
+
       res.json({ message: "Subscription plan updated successfully" });
     }
   );

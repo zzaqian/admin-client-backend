@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 require("dotenv").config();
+const { logActivity } = require("../helpers/logHelper");
 
 // Create a new user
 exports.createUser = (req, res) => {
@@ -22,6 +23,15 @@ exports.createUser = (req, res) => {
           return res.status(409).json({ message: "Duplicate email" });
         else throw err;
       }
+
+      // Log the activity
+      logActivity(
+        "User",
+        "Create User",
+        `Created user with name: ${name} and email: ${email}`,
+        req.curUserUuid,
+        uuid
+      );
 
       res.json({
         message: "User created successfully",
@@ -58,6 +68,16 @@ exports.updateUser = (req, res) => {
     [name, email, role, uuid],
     (err, results) => {
       if (err) throw err;
+
+      // Log the activity
+      logActivity(
+        "User",
+        "Update User",
+        `Updated user with new name: ${name}, new email: ${email}, and new role: ${role}`,
+        req.curUserUuid,
+        uuid
+      );
+
       res.json({ message: "User updated successfully" });
     }
   );
@@ -68,6 +88,10 @@ exports.deleteUser = (req, res) => {
   const { uuid } = req.body;
   db.query("DELETE FROM users WHERE uuid = ?", [uuid], (err, results) => {
     if (err) throw err;
+
+    // Log the activity
+    logActivity("User", "Delete User", `Deleted user`, req.curUserUuid, uuid);
+
     res.json({ message: "User deleted successfully" });
   });
 };
@@ -80,6 +104,16 @@ exports.lockUser = (req, res) => {
     [lock_reason, uuid],
     (err) => {
       if (err) return res.status(500).json({ message: "Failed to lock user" });
+
+      // Log the activity
+      logActivity(
+        "User",
+        "Lock User",
+        `Locked user with Reason: ${lock_reason}`,
+        req.curUserUuid,
+        uuid
+      );
+
       res.json({ message: "User locked successfully" });
     }
   );
@@ -94,6 +128,16 @@ exports.unlockUser = (req, res) => {
     (err) => {
       if (err)
         return res.status(500).json({ message: "Failed to unlock user" });
+
+      // Log the activity
+      logActivity(
+        "User",
+        "Unlock User",
+        `Unlocked user`,
+        req.curUserUuid,
+        uuid
+      );
+
       res.json({ message: "User unlocked successfully" });
     }
   );
@@ -102,18 +146,6 @@ exports.unlockUser = (req, res) => {
 // Simulate password reset email
 exports.resetPasswordEmail = async (req, res) => {
   const { uuid, email, reset_reason } = req.body;
-
-  db.query(
-    "UPDATE users SET reset_reason = ? WHERE uuid = ?",
-    [reset_reason, uuid],
-    (err) => {
-      if (err)
-        return res
-          .status(500)
-          .json({ message: "Failed to set reset password reason" });
-      // res.json({ message: "User reset password reason stored successfully" });
-    }
-  );
 
   try {
     // Generate a password reset token (expires in 1 hour)
@@ -138,13 +170,34 @@ exports.resetPasswordEmail = async (req, res) => {
     };
 
     await transporter.sendMail(mailOptions);
-    return res.json({ message: "Password reset email sent successfully" });
   } catch (error) {
     console.error(error);
     return res
       .status(500)
       .json({ message: "Failed to send password reset email" });
   }
+
+  db.query(
+    "UPDATE users SET reset_reason = ? WHERE uuid = ?",
+    [reset_reason, uuid],
+    (err) => {
+      if (err)
+        return res
+          .status(500)
+          .json({ message: "Failed to set reset password reason" });
+
+      // Log the activity
+      logActivity(
+        "User",
+        "Reset Password Email",
+        `Password reset email sent with Reason: ${reset_reason}`,
+        req.curUserUuid,
+        uuid
+      );
+
+      return res.json({ message: "Password reset email sent successfully" });
+    }
+  );
 };
 
 // Reset a user's password
@@ -163,6 +216,16 @@ exports.resetPasswordConfirm = async (req, res) => {
       (err, result) => {
         if (err)
           return res.status(500).json({ message: "Failed to reset password" });
+
+        // Log the activity
+        logActivity(
+          "User",
+          "Reset Password Confirm",
+          `User reset password`,
+          curUserUuid,
+          curUserUuid
+        );
+
         res.json({ message: "Password reset successfully" });
       }
     );
