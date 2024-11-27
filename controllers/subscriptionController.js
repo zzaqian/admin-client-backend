@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 require("dotenv").config();
-const { logActivity } = require('../helpers/logHelper');
+const { logActivity, logError } = require('../helpers/logHelper');
 
 // Get all subscriptions
 exports.getSubs = (req, res) => {
@@ -27,7 +27,10 @@ FROM
 JOIN 
     subscriptions s ON u.uuid = s.user_uuid;`,
     (err, results) => {
-      if (err) throw err;
+      if (err) {
+        logError("getSubs", err.code, err.sqlMessage);
+        throw err;
+      }
       res.json(results);
     }
   );
@@ -36,6 +39,7 @@ JOIN
 // Get details of a specific subscription by uuid
 exports.getSubByUuid = (req, res) => {
   const { uuid } = req.params;
+  const functionName = "getSubByUuid";
   db.query(
     `SELECT 
     u.name AS name,
@@ -58,10 +62,15 @@ WHERE
     s.uuid = ?;`,
     [uuid],
     (err, results) => {
-      if (err)
-        return res.status(500).json({ message: "Database query failed" });
-      if (results.length === 0)
-        return res.status(404).json({ message: "Subscription not found" });
+      if (err) {
+        logError(functionName, err.code, err.sqlMessage);
+        throw err;
+      }
+      if (results.length === 0) {
+        const errorMessage = "Subscription not found";
+        logError(functionName, "SUBSCRIPTION_NOT_FOUND", errorMessage)
+        return res.status(404).json({ message: errorMessage });
+      }
       res.json(results[0]);
     }
   );
@@ -77,10 +86,10 @@ exports.cancelSub = (req, res) => {
     "UPDATE subscriptions SET is_canceled = true, details = ? WHERE uuid = ?",
     [cancel_reason, uuid],
     (err) => {
-      if (err)
-        return res
-          .status(500)
-          .json({ message: "Failed to cancel subscription" });
+      if (err) {
+        logError("cancelSub", err.code, err.sqlMessage);
+        throw err;
+      }
 
       // Log the activity
       logActivity(
@@ -106,10 +115,10 @@ exports.refundSub = (req, res) => {
     "UPDATE subscriptions SET status = 'Expired', is_canceled = true, details = 'Refunded with amount: ?' WHERE uuid = ?",
     [refund_amount, uuid],
     (err) => {
-      if (err)
-        return res
-          .status(500)
-          .json({ message: "Failed to refund subscription" });
+      if (err) {
+        logError("refundSub", err.code, err.sqlMessage);
+        throw err;
+      }
 
       // Log the activity
       logActivity(
@@ -132,10 +141,10 @@ exports.updatePlan = (req, res) => {
     "UPDATE subscriptions SET plan = ? WHERE uuid = ?",
     [new_plan, uuid],
     (err) => {
-      if (err)
-        return res
-          .status(500)
-          .json({ message: "Failed to update subscription plan" });
+      if (err) {
+        logError("updatePlan", err.code, err.sqlMessage);
+        throw err;
+      }
 
       // Log the activity
       logActivity(

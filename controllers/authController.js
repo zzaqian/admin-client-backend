@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const db = require("../config/db");
 require("dotenv").config();
-const { logActivity } = require("../helpers/logHelper");
+const { logActivity, logError } = require("../helpers/logHelper");
 
 // In-memory blacklist for tokens
 let tokenBlacklist = [];
@@ -13,7 +13,9 @@ exports.logout = (req, res) => {
   const uuid = req.curUserUuid;
 
   if (!token) {
-    return res.status(403).json({ message: "No token provided" });
+    const errorMessage = "No token provided";
+    logError("logout", "NO_TOKEN", errorMessage);
+    return res.status(403).json({ message: errorMessage });
   }
 
   // Add the token to the blacklist
@@ -33,15 +35,20 @@ exports.isTokenBlacklisted = (token) => {
 // Login and generate JWT token
 exports.login = (req, res) => {
   const { email, password } = req.body;
+  const functionName = "login";
   // console.log(bcrypt.hashSync(password, 10));
 
   db.query("SELECT * FROM users WHERE email = ?", [email], (err, results) => {
-    if (err) throw err;
+    if (err) {
+      logError(functionName, err.code, err.sqlMessage);
+      throw err;
+    }
 
     if (results.length > 0) {
       const user = results[0];
 
       if (user.status === "Locked") {
+        logError(functionName, "ACCOUNT_LOCKED", "Account locked");
         return res.status(423).json({ message: "Account locked" });
       }
 
@@ -68,9 +75,11 @@ exports.login = (req, res) => {
 
         res.json({ token, message: "Logged in successfully" });
       } else {
+        logError(functionName, "INCORRECT_PASSWORD", "Invalid password");
         res.status(401).json({ message: "Invalid password" });
       }
     } else {
+      logError(functionName, "USER_NOT_FOUND", "User not found");
       res.status(404).json({ message: "User not found" });
     }
   });

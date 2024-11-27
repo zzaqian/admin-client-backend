@@ -31,6 +31,25 @@ const logActivity = (
   );
 };
 
+/**
+ * Log an error in the backend.
+ * @param {string} functionName - The name of the backend function (e.g., "createUser").
+ * @param {string} errorCode - Error code returned by the db query.
+ * @param {string} errorMessage - Error message returned by the db query.
+ */
+const logError = (functionName, errorCode = null, errorMessage = null) => {
+  const query = `
+        INSERT INTO error_log (function_name, error_code, error_message)
+        VALUES (?, ?, ?)
+    `;
+  db.query(query, [functionName, errorCode, errorMessage], (err) => {
+    if (err) {
+      console.error("Failed to log backend error:", err);
+    }
+  });
+};
+
 module.exports = {
   logActivity,
+  logError,
 };

@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 require("dotenv").config();
-const { logActivity } = require("../helpers/logHelper");
+const { logActivity, logError } = require("../helpers/logHelper");
 
 // Create a new user
 exports.createUser = (req, res) => {
@@ -19,6 +19,7 @@ exports.createUser = (req, res) => {
     [uuid, name, email, hashedPassword, role],
     (err, results) => {
       if (err) {
+        logError("createUser", err.code, err.sqlMessage);
         if (err.code === "ER_DUP_ENTRY")
           return res.status(409).json({ message: "Duplicate email" });
         else throw err;
@@ -43,7 +44,10 @@ exports.createUser = (req, res) => {
 // Get all users
 exports.getUsers = (req, res) => {
   db.query("SELECT * FROM users", (err, results) => {
-    if (err) throw err;
+    if (err) {
+      logError("getUsers", err.code, err.sqlMessage);
+      throw err;
+    }
     res.json(results);
   });
 };
@@ -52,7 +56,10 @@ exports.getUsers = (req, res) => {
 exports.getUserByUuid = (req, res) => {
   const { uuid } = req.params;
   db.query("SELECT * FROM users WHERE uuid = ?", [uuid], (err, results) => {
-    if (err) return res.status(500).json({ message: "Database query failed" });
+    if (err) {
+      logError("getUserByUuid", err.code, err.sqlMessage);
+      throw err;
+    }
     if (results.length === 0)
       return res.status(404).json({ message: "User not found" });
     res.json(results[0]);
@@ -67,7 +74,10 @@ exports.updateUser = (req, res) => {
     "UPDATE users SET name = ?, email = ?, role = ? WHERE uuid = ?",
     [name, email, role, uuid],
     (err, results) => {
-      if (err) throw err;
+      if (err) {
+        logError("updateUser", err.code, err.sqlMessage);
+        throw err;
+      }
 
       // Log the activity
       logActivity(
@@ -87,7 +97,10 @@ exports.updateUser = (req, res) => {
 exports.deleteUser = (req, res) => {
   const { uuid } = req.body;
   db.query("DELETE FROM users WHERE uuid = ?", [uuid], (err, results) => {
-    if (err) throw err;
+    if (err) {
+      logError("deleteUser", err.code, err.sqlMessage);
+      throw err;
+    }
 
     // Log the activity
     logActivity("User", "Delete User", `Deleted user`, req.curUserUuid, uuid);
@@ -103,7 +116,10 @@ exports.lockUser = (req, res) => {
     "UPDATE users SET status = 'Locked', lock_reason = ? WHERE uuid = ?",
     [lock_reason, uuid],
     (err) => {
-      if (err) return res.status(500).json({ message: "Failed to lock user" });
+      if (err) {
+        logError("lockUser", err.code, err.sqlMessage);
+        throw err;
+      }
 
       // Log the activity
       logActivity(
@@ -126,8 +142,10 @@ exports.unlockUser = (req, res) => {
     "UPDATE users SET status = 'Active', lock_reason = NULL WHERE uuid = ?",
     [uuid],
     (err) => {
-      if (err)
-        return res.status(500).json({ message: "Failed to unlock user" });
+      if (err) {
+        logError("unlockUser", err.code, err.sqlMessage);
+        throw err;
+      }
 
       // Log the activity
       logActivity(
@@ -146,6 +164,7 @@ exports.unlockUser = (req, res) => {
 // Simulate password reset email
 exports.resetPasswordEmail = async (req, res) => {
   const { uuid, email, reset_reason } = req.body;
+  const functionName = "resetPasswordEmail";
 
   try {
     // Generate a password reset token (expires in 1 hour)
@@ -172,6 +191,7 @@ exports.resetPasswordEmail = async (req, res) => {
     await transporter.sendMail(mailOptions);
   } catch (error) {
     console.error(error);
+    logError(functionName, error.name, error.message);
     return res
       .status(500)
       .json({ message: "Failed to send password reset email" });
@@ -181,10 +201,10 @@ exports.resetPasswordEmail = async (req, res) => {
     "UPDATE users SET reset_reason = ? WHERE uuid = ?",
     [reset_reason, uuid],
     (err) => {
-      if (err)
-        return res
-          .status(500)
-          .json({ message: "Failed to set reset password reason" });
+      if (err) {
+        logError(functionName, err.code, err.sqlMessage);
+        throw err;
+      }
 
       // Log the activity
       logActivity(
@@ -214,8 +234,10 @@ exports.resetPasswordConfirm = async (req, res) => {
       "UPDATE users SET password = ? WHERE uuid = ?",
       [hashedPassword, curUserUuid],
       (err, result) => {
-        if (err)
-          return res.status(500).json({ message: "Failed to reset password" });
+        if (err) {
+          logError("resetPasswordConfirm", err.code, err.sqlMessage);
+          throw err;
+        }
 
         // Log the activity
         logActivity(
